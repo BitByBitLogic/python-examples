@@ -4,6 +4,7 @@ import os
 from pathlib import Path
 from src.helpers.logging.logger import Logger
 
+# Template string for generating a logger.config file dynamically per test
 LOGGER_CONFIG_TEMPLATE = """
 [loggers]
 keys=root,{logger_name}
@@ -40,12 +41,16 @@ args=('{log_path}', 'a', 1048576, 5)
 format=%(asctime)s - %(name)s - %(levelname)s - %(funcName)s:%(lineno)d - %(message)s
 """
 
+
 @pytest.fixture(scope="module")
 def temp_log_dir(tmp_path_factory):
+    # Create a temporary directory for storing logs during tests
     return tmp_path_factory.mktemp("tmp")
+
 
 @pytest.fixture(scope="function")
 def logger_config_file(temp_log_dir):
+    # Write a temporary logger.config file to the test log directory
     log_path = temp_log_dir / "test.log"
     config_path = temp_log_dir / "logger.config"
     config_text = LOGGER_CONFIG_TEMPLATE.format(
@@ -55,22 +60,31 @@ def logger_config_file(temp_log_dir):
     config_path.write_text(config_text)
     return config_path
 
+
 @pytest.fixture(scope="function")
 def logger(temp_log_dir, logger_config_file):
+    # Set up logging using the temporary config file
     Logger.setup_logging(config_path=str(logger_config_file))
     yield Logger.get_logger("test_logger")
+    # Clean up logging handlers after each test
     for handler in logging.root.handlers[:]:
         logging.root.removeHandler(handler)
 
+
 def test_logger_creation(logger):
+    # Test that the logger is created successfully
     assert logger is not None
     assert isinstance(logger, logging.Logger)
 
+
 def test_log_file_creation(temp_log_dir):
+    # Test that the log file is actually created
     log_file = temp_log_dir / "test.log"
     assert log_file.exists()
 
+
 def test_log_levels(logger, temp_log_dir):
+    # Test that all logging levels are captured
     logger.debug("Debug message")
     logger.info("Info message")
     logger.warning("Warning message")
@@ -84,24 +98,32 @@ def test_log_levels(logger, temp_log_dir):
     assert "ERROR - test_log_levels:" in log_content
     assert "CRITICAL - test_log_levels:" in log_content
 
+
 def test_log_format(logger, temp_log_dir):
+    # Test that the log message is formatted correctly
     logger.info("Test message")
     log_content = (temp_log_dir / "test.log").read_text()
     assert "INFO - test_log_format:" in log_content
     assert "Test message" in log_content
 
+
 def test_console_output(temp_log_dir, logger_config_file, capsys):
+    # Test that log messages are also printed to console
     Logger.setup_logging(config_path=str(logger_config_file))
     logger = Logger.get_logger("test_logger")
     logger.info("Console test")
     captured = capsys.readouterr()
     assert "Console test" in captured.out
 
+
 def test_error_handling():
+    # Test error when config path is invalid
     with pytest.raises(Exception):
         Logger.setup_logging(config_path="/nonexistent/logger.config")
 
+
 def test_multiple_loggers(temp_log_dir):
+    # Test logging from two loggers writing to the same file
     log_file = temp_log_dir / "multi_test.log"
     config_path = temp_log_dir / "multi_logger.config"
     config_text = LOGGER_CONFIG_TEMPLATE.format(
@@ -122,12 +144,16 @@ def test_multiple_loggers(temp_log_dir):
     assert "Message from logger1" in log_content
     assert "Message from logger2" in log_content
 
+
 def test_warning_log(logger, caplog):
+    # Test that a warning log message is captured
     with caplog.at_level(logging.WARNING):
         logger.warning("This is a warning")
     assert "This is a warning" in caplog.text
 
+
 def test_log_propagation(temp_log_dir):
+    # Test propagation of logs from a child logger
     log_file = temp_log_dir / "propagation_test.log"
     config_path = temp_log_dir / "propagation.config"
     config_text = LOGGER_CONFIG_TEMPLATE.format(
@@ -144,7 +170,9 @@ def test_log_propagation(temp_log_dir):
     log_content = log_file.read_text()
     assert "Propagation test message" in log_content
 
+
 def test_exception_logging(logger, temp_log_dir):
+    # Test that exceptions are logged properly with stack trace
     try:
         raise ValueError("Test exception")
     except ValueError:
@@ -155,5 +183,7 @@ def test_exception_logging(logger, temp_log_dir):
     assert "ValueError: Test exception" in log_content
     assert "Traceback (most recent call last):" in log_content
 
+
 if __name__ == "__main__":
+    # Run tests from CLI
     pytest.main([__file__, "-v", "-s"])
